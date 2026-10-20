@@ -266,21 +266,21 @@
 
     @media (max-width: 720px) {
       .info-panel {
-        top: 10px;
-        left: 10px;
-        right: 10px;
+        top: calc(10px + env(safe-area-inset-top, 0px));
+        left: calc(10px + env(safe-area-inset-left, 0px));
+        right: calc(10px + env(safe-area-inset-right, 0px));
         max-width: none;
         padding: 10px 14px;
       }
       .loader-panel {
         top: auto;
-        bottom: 84px;
-        left: 10px;
-        right: 10px;
+        bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+        left: calc(10px + env(safe-area-inset-left, 0px));
+        right: calc(10px + env(safe-area-inset-right, 0px));
         width: auto;
       }
       .controls-dock {
-        bottom: 12px;
+        bottom: calc(12px + env(safe-area-inset-bottom, 0px));
         padding: 6px 8px;
       }
       .ui-btn {
@@ -330,10 +330,10 @@
     </div>
     <div class="loader-actions">
       <label for="file-input" class="btn-upload">Загрузить .GLB / .GLTF файл</label>
-      <input type="file" id="file-input" accept=".glb,.gltf" />
+      <input type="file" id="file-input" accept=".glb,.gltf,.bin,image/*" multiple />
     </div>
     <div class="loader-hint">
-      Можно подменить модель: перетащи в окно другой <b>.glb</b> без сжатия Draco.
+      Можно подменить модель: перетащи в окно <b>.glb</b> или <b>.gltf</b> вместе с его <b>.bin</b> и текстурами.
     </div>
   </div>
 
@@ -661,6 +661,8 @@
     carRoot.add(proceduralCarGroup);
 
     let loadedGlbGroup = null;
+    let loadedIsBuiltin = false;
+    let userModelRequested = false;
     let customRestyleEnabled = true;
 
     // Построение улучшенного сглаженного макета по реальным габаритам (пока не загружен .GLB)
@@ -1057,7 +1059,9 @@
     // ============================================================================
     // 6. ЗАГРУЗЧИК НАСТОЯЩИХ 3D-МОДЕЛЕЙ (.GLB / .GLTF) + АВТО-ТЮНИНГ ПОД ФОТО
     // ============================================================================
-    const gltfLoader = new GLTFLoader();
+    // Свой менеджер: для .gltf подменяем ссылки на .bin и текстуры на выбранные пользователем файлы
+    const modelLoadingManager = new THREE.LoadingManager();
+    const gltfLoader = new GLTFLoader(modelLoadingManager);
     const dracoLoader = new DRACOLoader();
     dracoLoader.setDecoderPath('https://unpkg.com/three@0.160.0/examples/jsm/libs/draco/');
     gltfLoader.setDRACOLoader(dracoLoader);
@@ -1091,6 +1095,36 @@
       return m;
     }
 
+    function disposeMaterial(m) {
+      Object.values(m).forEach((value) => { if (value && value.isTexture) value.dispose(); });
+      m.dispose();
+    }
+
+    // Освобождаем GPU-ресурсы выгружаемой модели (общие материалы сцены не трогаем)
+    function disposeLoadedModel(rootObj) {
+      rootObj.traverse((child) => {
+        if (child.isMesh) child.geometry.dispose();
+      });
+      new Set([...originalMaterialsMap.values(), ...glowMats].flat()).forEach(disposeMaterial);
+      originalMaterialsMap.clear();
+      glowMats.length = 0;
+      glowCache.clear();
+    }
+
+    // Модель, загрузка которой устарела, ещё не стилизована: все её материалы собственные
+    function disposeStaleScene(rootObj) {
+      rootObj.traverse((child) => {
+        if (!child.isMesh) return;
+        child.geometry.dispose();
+        [child.material].flat().forEach(disposeMaterial);
+      });
+    }
+
+    // Совпадение с началом слова: «rim» найдёт «rim_fl» и «wheel rims», но не «trim» / «primer»
+    function hasWordStart(text, word) {
+      return new RegExp(`(^|[^a-z])${word}`).test(text);
+    }
+
     function applyPhotoStyleToLoadedModel(rootObj, useCustomStyle) {
       rootObj.traverse((child) => {
         if (!child.isMesh) return;
@@ -1109,13 +1143,16 @@
         const origMat = originalMaterialsMap.get(child.uuid);
         const matName = (origMat?.name || '').toLowerCase();
 
-        // Точные имена материалов встроенной модели S3 8V
-        if (matName === 'material_23' || matName === 'rimlogo') { child.material = blackAlloyMaterial; return; }
-        if (matName === 'vidros' || matName === 'windows_int') { child.material = bunkerGlassMaterial; return; }
-        if (matName === 'carpaint') { child.material = bodyMaterial; return; }
-        if (matName === 'tyre') { child.material = tireMaterial; return; }
-        if (matName === 'flights') { child.material = getGlow(origMat, 0xFFF1D6, 0.6); return; }
-        if (matName === 'ext_plate_plastic') { child.material = getPlateMat(); return; }
+        // Точные имена материалов встроенной модели S3 8V (у чужих моделей «material» / «material_23» значат другое)
+        if (loadedIsBuiltin) {
+          if (matName === 'material_23' || matName === 'rimlogo') { child.material = blackAlloyMaterial; return; }
+          if (matName === 'vidros' || matName === 'windows_int') { child.material = bunkerGlassMaterial; return; }
+          if (matName === 'carpaint') { child.material = bodyMaterial; return; }
+          if (matName === 'tyre') { child.material = tireMaterial; return; }
+          if (matName === 'flights') { child.material = getGlow(origMat, 0xFFF1D6, 0.6); return; }
+          if (matName === 'material') { child.material = getGlow(origMat, 0xFF1428, 1.4); return; } // задние фонари
+          if (matName === 'ext_plate_plastic') { child.material = getPlateMat(); return; }
+        }
         const meshName = (child.name || '').toLowerCase();
         const combined = `${matName} ${meshName}`;
 
@@ -1146,43 +1183,62 @@
         ) {
           child.material = bodyMaterial;
         }
-        // 3. Определение колёсных дисков -> Чёрные диски как на фото
-        else if (
-          combined.includes('rim') ||
-          combined.includes('wheel') ||
-          combined.includes('alloy') ||
-          combined.includes('spoke') ||
-          combined.includes('jante')
-        ) {
-          if (!combined.includes('tire') && !combined.includes('tyre') && !combined.includes('rubber')) {
-            child.material = blackAlloyMaterial;
-          }
-        }
-        // 4. Резина
+        // 3. Резина
         else if (combined.includes('tire') || combined.includes('tyre') || combined.includes('rubber') || combined.includes('pneu')) {
           child.material = tireMaterial;
+        }
+        // 4. Определение колёсных дисков -> Чёрные диски как на фото (руль и молдинги не трогаем)
+        else if (
+          (
+            hasWordStart(combined, 'rim') ||
+            hasWordStart(combined, 'wheel') ||
+            combined.includes('alloy') ||
+            combined.includes('spoke') ||
+            combined.includes('jante')
+          ) &&
+          !combined.includes('steer')
+        ) {
+          child.material = blackAlloyMaterial;
         }
       });
     }
 
-    function loadGlbFromBuffer(arrayBuffer, fileName) {
+    // Номер последней начатой загрузки: результат более старой загрузки отбрасываем
+    let loadSeq = 0;
+
+    // resourceUrls: имя файла -> blob URL для внешних ресурсов .gltf (.bin, текстуры)
+    function loadGlbFromBuffer(arrayBuffer, fileName, { isBuiltin = false, resourceUrls = new Map() } = {}) {
+      const seq = ++loadSeq;
       const spinner = document.getElementById('loader-spinner');
       const statusEl = document.getElementById('model-status');
       spinner.style.display = 'inline';
+
+      modelLoadingManager.setURLModifier((url) => {
+        const name = decodeURIComponent(url.split(/[\\/]/).pop());
+        return resourceUrls.get(name) || url;
+      });
+      const releaseResources = () => resourceUrls.forEach((u) => URL.revokeObjectURL(u));
 
       gltfLoader.parse(
         arrayBuffer,
         '',
         (gltf) => {
+          releaseResources();
+          if (seq !== loadSeq) {
+            disposeStaleScene(gltf.scene);
+            return;
+          }
           spinner.style.display = 'none';
 
-          // Убираем предыдущую модель
+          // Убираем предыдущую модель и освобождаем её память
           if (loadedGlbGroup) {
             carRoot.remove(loadedGlbGroup);
+            disposeLoadedModel(loadedGlbGroup);
           }
           proceduralCarGroup.visible = false;
 
           loadedGlbGroup = gltf.scene;
+          loadedIsBuiltin = isBuiltin;
 
           // Вычисляем габариты и масштабируем точно под длину Audi A3 Sedan (4.456 м)
           const box = new THREE.Box3().setFromObject(loadedGlbGroup);
@@ -1214,21 +1270,36 @@
           rebuildCarWashFoamOnMesh(loadedGlbGroup);
         },
         (err) => {
+          releaseResources();
+          if (seq !== loadSeq) return;
           spinner.style.display = 'none';
           if (!loadedGlbGroup) proceduralCarGroup.visible = true;
-          statusEl.textContent = 'Не удалось открыть файл: ' + (err && err.message ? err.message : 'неизвестная ошибка') + '. Если модель сжата Draco, пересохрани её без сжатия.';
+          statusEl.textContent = 'Не удалось открыть файл: ' + (err && err.message ? err.message : 'неизвестная ошибка') + '. Для .gltf выбери вместе с ним .bin и текстуры; модель со сжатием Draco пересохрани без него.';
         }
       );
+    }
+
+    // Загрузка своей модели: .glb или .gltf (+ его .bin и текстуры, выбранные вместе с ним)
+    async function loadUserModelFiles(fileList) {
+      const files = Array.from(fileList || []);
+      const modelFile = files.find((f) => /\.(glb|gltf)$/i.test(f.name));
+      if (!modelFile) {
+        if (files.length) document.getElementById('model-status').textContent = 'Нужен файл .glb или .gltf.';
+        return;
+      }
+      userModelRequested = true;
+      const resourceUrls = new Map(
+        files.filter((f) => f !== modelFile).map((f) => [f.name, URL.createObjectURL(f)])
+      );
+      loadGlbFromBuffer(await modelFile.arrayBuffer(), modelFile.name, { resourceUrls });
     }
 
     // Обработка кнопки выбора файла
     const fileInput = document.getElementById('file-input');
     fileInput.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => loadGlbFromBuffer(ev.target.result, file.name);
-      reader.readAsArrayBuffer(file);
+      loadUserModelFiles(e.target.files);
+      // Сбрасываем, чтобы повторный выбор того же файла снова вызывал change
+      e.target.value = '';
     });
 
     // Обработка Drag & Drop прямо в окно браузера
@@ -1243,11 +1314,7 @@
     window.addEventListener('drop', (e) => {
       e.preventDefault();
       dropOverlay.classList.remove('active');
-      const file = e.dataTransfer.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => loadGlbFromBuffer(ev.target.result, file.name);
-      reader.readAsArrayBuffer(file);
+      loadUserModelFiles(e.dataTransfer.files);
     });
 
     // ============================================================================
@@ -1340,16 +1407,48 @@
     foamGroup.add(foamInstancedPink);
     foamGroup.add(foamInstancedWhite);
 
+    // Пена ложится на верхнюю поверхность кузова: карта высот (макс. Y вершин) по сетке X×Z
     function rebuildCarWashFoamOnMesh(targetGroup) {
       const dummy = new THREE.Object3D();
+      targetGroup.updateMatrixWorld(true);
       const box = new THREE.Box3().setFromObject(targetGroup);
 
+      const NX = 24, NZ = 56;
+      const cellX = Math.max((box.max.x - box.min.x) / NX, 1e-6);
+      const cellZ = Math.max((box.max.z - box.min.z) / NZ, 1e-6);
+      const heights = new Float32Array(NX * NZ).fill(-Infinity);
+      const v = new THREE.Vector3();
+      targetGroup.traverse((child) => {
+        if (!child.isMesh) return;
+        const pos = child.geometry.attributes.position;
+        for (let i = 0; i < pos.count; i++) {
+          v.fromBufferAttribute(pos, i).applyMatrix4(child.matrixWorld);
+          const ix = THREE.MathUtils.clamp(Math.floor((v.x - box.min.x) / cellX), 0, NX - 1);
+          const iz = THREE.MathUtils.clamp(Math.floor((v.z - box.min.z) / cellZ), 0, NZ - 1);
+          const k = iz * NX + ix;
+          if (v.y > heights[k]) heights[k] = v.y;
+        }
+      });
+
+      // Только ячейки выше нижней трети машины (без пола под колёсами и порогов)
+      const minTop = box.min.y + 0.35 * (box.max.y - box.min.y);
+      const cells = [];
+      for (let k = 0; k < heights.length; k++) {
+        if (heights[k] > minTop) cells.push(k);
+      }
+
       for (let i = 0; i < foamCount; i++) {
-        const z = THREE.MathUtils.lerp(box.min.z * 0.92, box.max.z * 0.92, Math.random());
-        const isCabin = z > -0.95 && z < 0.75;
-        const maxW = isCabin ? 0.66 : 0.82;
-        const x = (Math.random() - 0.5) * 2 * maxW;
-        let y = isCabin ? 0.95 + Math.random() * 0.32 : 0.55 + Math.random() * 0.26;
+        let x, y, z;
+        if (cells.length) {
+          const k = cells[Math.floor(Math.random() * cells.length)];
+          x = box.min.x + ((k % NX) + Math.random()) * cellX;
+          z = box.min.z + (Math.floor(k / NX) + Math.random()) * cellZ;
+          y = heights[k];
+        } else {
+          x = THREE.MathUtils.lerp(box.min.x, box.max.x, Math.random());
+          z = THREE.MathUtils.lerp(box.min.z, box.max.z, Math.random());
+          y = box.max.y;
+        }
 
         dummy.position.set(x, y, z);
         const s = 0.045 + Math.random() * 0.085;
@@ -1457,6 +1556,9 @@
 
         ambientLight.color.setHex(0x3A1846);
         ambientLight.intensity = 1.5;
+        hemiLight.color.setHex(0xC890FF);
+        hemiLight.groundColor.setHex(0x0E0516);
+        hemiLight.intensity = 1.15;
         studioKey.intensity = 1.1;
 
         magentaRim.intensity = 45;
@@ -1539,16 +1641,15 @@
 
     // Встроенная модель: 2014 Audi S3 Limousine (8V) — tonielpro520, CC BY
     proceduralCarGroup.visible = false;
-    fetch('audi-s3-8v.b64.txt')
-      .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
-      .then((b64) => {
-        const bin = atob(b64.trim());
-        const bytes = new Uint8Array(bin.length);
-        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-        return bytes.buffer;
+    fetch('audi-s3-8v.glb')
+      .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); })
+      .then((buf) => {
+        // Пользователь уже выбрал свою модель, пока качалась встроенная, — не перетираем её
+        if (userModelRequested) return;
+        loadGlbFromBuffer(buf, 'Audi S3 Limousine 8V', { isBuiltin: true });
       })
-      .then((buf) => loadGlbFromBuffer(buf, 'Audi S3 Limousine 8V'))
       .catch(() => {
+        if (userModelRequested) return;
         proceduralCarGroup.visible = true;
         document.getElementById('model-status').textContent = 'Модель не загрузилась, показан упрощённый макет.';
       });
