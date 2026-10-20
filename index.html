@@ -1,0 +1,1557 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Audi A3 в 3D</title>
+<style>
+    :root {
+      color-scheme: dark;
+      --bg-glass: rgba(16, 10, 26, 0.72);
+      --border-glass: rgba(255, 255, 255, 0.14);
+      --accent-magenta: #FF48D6;
+      --accent-violet: #A874FF;
+      --accent-lime: #D8FF3E;
+      --text-main: #F5F2FA;
+      --text-muted: rgba(245, 242, 250, 0.65);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #0B0510;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      color: var(--text-main);
+    }
+
+    #canvas-container {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+    }
+
+    /* Полноэкранная зона при перетаскивании .glb */
+    #drop-overlay {
+      position: fixed;
+      inset: 16px;
+      z-index: 50;
+      border: 2px dashed var(--accent-lime);
+      border-radius: 24px;
+      background: rgba(11, 5, 16, 0.85);
+      backdrop-filter: blur(12px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 12px;
+      pointer-events: none;
+    }
+    #drop-overlay.active {
+      display: flex;
+    }
+    #drop-overlay h2 {
+      font-size: 22px;
+      color: var(--accent-lime);
+      font-weight: 700;
+    }
+    #drop-overlay p {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    /* Инфо-панель слева сверху */
+    .info-panel {
+      position: fixed;
+      top: calc(20px + env(safe-area-inset-top, 0px));
+      left: 20px;
+      z-index: 10;
+      padding: 14px 18px;
+      background: var(--bg-glass);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-glass);
+      border-radius: 14px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+      max-width: 390px;
+    }
+
+    .brand-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 5px;
+    }
+
+    .audi-rings-svg {
+      width: 46px;
+      height: 16px;
+      stroke: var(--text-main);
+      stroke-width: 2.2;
+      fill: none;
+    }
+
+    .badge-lime {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 2px 7px;
+      border-radius: 99px;
+      background: rgba(216, 255, 62, 0.15);
+      color: var(--accent-lime);
+      border: 1px solid rgba(216, 255, 62, 0.4);
+    }
+
+    .info-title {
+      font-size: 13.5px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      color: var(--text-main);
+      line-height: 1.4;
+    }
+
+    .info-sub {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      margin-top: 3px;
+    }
+
+    /* Панель загрузки реальной 3D модели справа сверху */
+    .loader-panel {
+      position: fixed;
+      top: calc(20px + env(safe-area-inset-top, 0px));
+      right: 20px;
+      z-index: 10;
+      padding: 12px 15px;
+      background: var(--bg-glass);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-glass);
+      border-radius: 14px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      width: 280px;
+    }
+
+    .loader-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--accent-lime);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .loader-actions {
+      display: flex;
+      gap: 6px;
+    }
+
+    .btn-upload {
+      flex: 1;
+      appearance: none;
+      border: 1px solid rgba(216, 255, 62, 0.45);
+      background: rgba(216, 255, 62, 0.12);
+      color: var(--accent-lime);
+      padding: 8px 10px;
+      border-radius: 9px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s ease;
+    }
+    .btn-upload:hover {
+      background: rgba(216, 255, 62, 0.24);
+    }
+
+    .loader-hint {
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.35;
+    }
+
+    /* Нижний док управления */
+    .controls-dock {
+      position: fixed;
+      bottom: calc(22px + env(safe-area-inset-bottom, 0px));
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 8px 10px;
+      background: var(--bg-glass);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-glass);
+      border-radius: 16px;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55);
+      max-width: calc(100vw - 24px);
+    }
+
+    .btn-group {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .divider {
+      width: 1px;
+      height: 24px;
+      background: var(--border-glass);
+      margin: 0 4px;
+    }
+
+    .ui-btn {
+      appearance: none;
+      border: 1px solid transparent;
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+      padding: 8px 14px;
+      border-radius: 10px;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+
+    .ui-btn:hover {
+      background: rgba(255, 255, 255, 0.11);
+      color: var(--text-main);
+    }
+
+    .ui-btn.active {
+      background: linear-gradient(135deg, rgba(255, 72, 214, 0.28), rgba(168, 116, 255, 0.28));
+      border-color: rgba(255, 72, 214, 0.65);
+      color: #fff;
+      box-shadow: 0 0 16px rgba(255, 72, 214, 0.3);
+    }
+
+    .ui-btn.toggle-on {
+      background: rgba(216, 255, 62, 0.15);
+      border-color: rgba(216, 255, 62, 0.55);
+      color: var(--accent-lime);
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .credit a { color: var(--accent-lime); text-decoration: none; }
+    .credit a:hover { text-decoration: underline; }
+
+    #file-input {
+      display: none;
+    }
+
+    @media (max-width: 720px) {
+      .info-panel {
+        top: 10px;
+        left: 10px;
+        right: 10px;
+        max-width: none;
+        padding: 10px 14px;
+      }
+      .loader-panel {
+        top: auto;
+        bottom: 84px;
+        left: 10px;
+        right: 10px;
+        width: auto;
+      }
+      .controls-dock {
+        bottom: 12px;
+        padding: 6px 8px;
+      }
+      .ui-btn {
+        padding: 7px 10px;
+        font-size: 11.5px;
+      }
+    }
+  </style>
+<script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <div id="canvas-container"></div>
+
+  <!-- Оверлей при перетаскивании файла -->
+  <div id="drop-overlay">
+    <h2>Отпусти файл .GLB / .GLTF</h2>
+    <p>Модель автоматически покрасится в LX7R Monsoon Gray, получит тонировку и чёрные диски</p>
+  </div>
+
+  <!-- Левая верхняя инфо-панель -->
+  <div class="info-panel">
+    <div class="brand-row">
+      <svg class="audi-rings-svg" viewBox="0 0 110 38">
+        <circle cx="20" cy="19" r="14"></circle>
+        <circle cx="43" cy="19" r="14"></circle>
+        <circle cx="66" cy="19" r="14"></circle>
+        <circle cx="89" cy="19" r="14"></circle>
+      </svg>
+      <span class="badge-lime">8V US-SPEC · QUATTRO LOOK</span>
+    </div>
+    <div class="info-title">Audi A3 Sedan 2016 · 1.8 TFSI · 170 hp · LX7R Monsoon Gray</div>
+    <div class="info-sub" id="model-status">Загружаю 3D-модель…</div>
+    <div class="info-sub credit">3D-модель: <a href="https://sketchfab.com/3d-models/2014-audi-s3-limousine-33056acd771241638ebe74109ba2777a" target="_blank" rel="noopener">2014 Audi S3 Limousine</a> — tonielpro520, CC BY</div>
+  </div>
+
+  <!-- Правая верхняя панель загрузки .GLB -->
+  <div class="loader-panel">
+    <div class="loader-title">
+      <span>Своя 3D-модель (.GLB)</span>
+      <span id="loader-spinner" style="display:none; color:#FF48D6;">Загрузка...</span>
+    </div>
+    <div class="loader-actions">
+      <label for="file-input" class="btn-upload">Загрузить .GLB / .GLTF файл</label>
+      <input type="file" id="file-input" accept=".glb,.gltf" />
+    </div>
+    <div class="loader-hint">
+      Можно подменить модель: перетащи в окно другой <b>.glb</b> без сжатия Draco.
+    </div>
+  </div>
+
+  <!-- Нижняя панель режимов -->
+  <div class="controls-dock">
+    <div class="btn-group" role="group" aria-label="Scene Modes">
+      <button class="ui-btn" data-mode="studio">Studio</button>
+      <button class="ui-btn active" data-mode="acid">Acid</button>
+      <button class="ui-btn" data-mode="wash">Car wash</button>
+    </div>
+    <div class="divider"></div>
+    <button class="ui-btn toggle-on" id="toggle-lights">
+      <span class="dot"></span>
+      <span>Оптика: ВКЛ</span>
+    </button>
+    <button class="ui-btn toggle-on" id="toggle-restyle" title="Автоматически красить загруженную .GLB модель в цвет LX7R, глухую тонировку и чёрные диски">
+      <span class="dot"></span>
+      <span>Стиль под фото: ВКЛ</span>
+    </button>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+    import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+    import { Reflector } from 'three/addons/objects/Reflector.js';
+    import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+    import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+    import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+    import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+
+    // ============================================================================
+    // 1. ИНИЦИАЛИЗАЦИЯ СЦЕНЫ, КАМЕРЫ И РЕНДЕРЕРА
+    // ============================================================================
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0B0510);
+    scene.fog = new THREE.FogExp2(0x0B0510, 0.042);
+
+    const camera = new THREE.PerspectiveCamera(36, window.innerWidth / window.innerHeight, 0.1, 100);
+    // Камера поставлена в ракурс 3/4 спереди-слева, как на твоём фото
+    camera.position.set(-3.3, 1.45, 4.1);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.12;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.target.set(0, 0.58, 0);
+    controls.maxPolarAngle = Math.PI / 2 - 0.015;
+    controls.minDistance = 2.4;
+    controls.maxDistance = 13.0;
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 0.45;
+
+    let idleTimer = null;
+    controls.addEventListener('start', () => {
+      controls.autoRotate = false;
+      if (idleTimer) clearTimeout(idleTimer);
+    });
+    controls.addEventListener('end', () => {
+      idleTimer = setTimeout(() => { controls.autoRotate = true; }, 4500);
+    });
+
+    // Пост-процессинг (мягкий неон Bloom)
+    const renderPass = new RenderPass(scene, camera);
+    const bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(window.innerWidth, window.innerHeight),
+      0.52, // strength
+      0.45, // radius
+      0.78  // threshold
+    );
+    const composer = new EffectComposer(renderer);
+    composer.addPass(renderPass);
+    composer.addPass(bloomPass);
+
+    // ============================================================================
+    // 2. ПРОЦЕДУРНЫЕ ТЕКСТУРЫ (МЕТАЛЛИК LX7R, НОМЕРА AX 2235 OO / KE 2929 AE, QUATTRO)
+    // ============================================================================
+    function createFlakeNormalMap() {
+      const size = 256;
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      const imgData = ctx.createImageData(size, size);
+      const data = imgData.data;
+      for (let i = 0; i < data.length; i += 4) {
+        const nx = 128 + (Math.random() - 0.5) * 26;
+        const ny = 128 + (Math.random() - 0.5) * 26;
+        data[i] = nx;
+        data[i + 1] = ny;
+        data[i + 2] = 255;
+        data[i + 3] = 255;
+      }
+      ctx.putImageData(imgData, 0, 0);
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      texture.repeat.set(35, 35);
+      return texture;
+    }
+
+    function createUkrainianPlateTexture(plateNumberText, subFrameText = 'Audi   quattro') {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 128;
+      const ctx = canvas.getContext('2d');
+
+      // Чёрная рамка номера
+      ctx.fillStyle = '#111215';
+      ctx.fillRect(0, 0, 512, 128);
+
+      // Белое поле
+      ctx.fillStyle = '#F4F6F9';
+      ctx.fillRect(8, 8, 496, 98);
+
+      // Синяя полоса UA слева
+      ctx.fillStyle = '#0057B8';
+      ctx.fillRect(8, 8, 56, 98);
+
+      // Флаг Украины
+      ctx.fillStyle = '#0057B8';
+      ctx.fillRect(20, 22, 32, 13);
+      ctx.fillStyle = '#FFD700';
+      ctx.fillRect(20, 35, 32, 13);
+
+      // Надпись UA
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 21px Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('UA', 36, 86);
+
+      // Номерной знак
+      ctx.fillStyle = '#0F1115';
+      ctx.font = 'bold 66px "Arial Narrow", Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(plateNumberText, 282, 59);
+
+      // Нижняя планка рамки
+      ctx.fillStyle = '#B8C0CC';
+      ctx.font = 'bold 13px Arial, sans-serif';
+      ctx.fillText(subFrameText, 256, 118);
+
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = 8;
+      return tex;
+    }
+
+    function createQuattroBadgeTexture() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 256;
+      canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#18181C';
+      ctx.fillRect(0, 0, 256, 64);
+      ctx.strokeStyle = '#D8DCE3';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(4, 4, 248, 56);
+      ctx.fillStyle = '#E6E9EF';
+      ctx.font = 'italic bold 34px Georgia, serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('quattro', 128, 33);
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      return tex;
+    }
+
+    // ============================================================================
+    // 3. МАТЕРИАЛЫ ПОД ФОТО (LX7R MONSOON GRAY, БУНКЕРНАЯ ТОНИРОВКА, ЧЁРНЫЕ ДИСКИ)
+    // ============================================================================
+    const flakeNormal = createFlakeNormalMap();
+
+    // Кузов: Audi Monsoon Gray Metallic (LX7R)
+    const bodyMaterial = new THREE.MeshPhysicalMaterial({
+      color: new THREE.Color(0x6C7278),
+      metalness: 0.62,
+      roughness: 0.26,
+      clearcoat: 1.0,
+      clearcoatRoughness: 0.06,
+      reflectivity: 0.95,
+      normalMap: flakeNormal,
+      normalScale: new THREE.Vector2(0.035, 0.035)
+    });
+
+    // Глухая тонировка «в бункер» (включая лобовое стекло, как на фото)
+    const bunkerGlassMaterial = new THREE.MeshPhysicalMaterial({
+      color: new THREE.Color(0x050608),
+      metalness: 0.15,
+      roughness: 0.04,
+      transmission: 0.08,
+      transparent: true,
+      opacity: 0.96,
+      clearcoat: 1.0,
+      clearcoatRoughness: 0.02,
+      reflectivity: 1.0
+    });
+
+    // Чёрный глянец / сатин (оконные молдинги антихром, сплиттер, вставки бампера)
+    const blackTrimMaterial = new THREE.MeshStandardMaterial({
+      color: 0x101114,
+      metalness: 0.35,
+      roughness: 0.32
+    });
+
+    // Чёрные легкосплавные диски (как на фото)
+    const blackAlloyMaterial = new THREE.MeshPhysicalMaterial({
+      color: 0x121316,
+      metalness: 0.75,
+      roughness: 0.22,
+      clearcoat: 0.85,
+      clearcoatRoughness: 0.1
+    });
+
+    // Хром (окантовка решетки Singleframe, кольца Audi, насадки выхлопа)
+    const chromeMaterial = new THREE.MeshStandardMaterial({
+      color: 0xF0F4FA,
+      metalness: 0.96,
+      roughness: 0.08
+    });
+
+    // Покрышки
+    const tireMaterial = new THREE.MeshStandardMaterial({
+      color: 0x141518,
+      metalness: 0.05,
+      roughness: 0.82
+    });
+
+    // Тормозной диск и суппорт
+    const rotorMaterial = new THREE.MeshStandardMaterial({
+      color: 0x7A8088,
+      metalness: 0.8,
+      roughness: 0.35
+    });
+
+    // Стекло фар
+    const headlightLensMat = new THREE.MeshPhysicalMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.32,
+      roughness: 0.05,
+      metalness: 0.1,
+      clearcoat: 1.0
+    });
+
+    // Светодиодные ДХО (тёплый бело-желтоватый оттенок дорестайла с фото)
+    const drlMat = new THREE.MeshStandardMaterial({
+      color: 0xFFF6D6,
+      emissive: new THREE.Color(0xFFF0B8),
+      emissiveIntensity: 3.0,
+      roughness: 0.15
+    });
+
+    // Ксеноновая линза ближнего света
+    const projectorMat = new THREE.MeshStandardMaterial({
+      color: 0xFFFFFF,
+      emissive: new THREE.Color(0xDCEBFF),
+      emissiveIntensity: 2.2
+    });
+
+    // Американский оранжевый маркер («рыжик» в углу фары)
+    const usAmberMat = new THREE.MeshStandardMaterial({
+      color: 0xFF7700,
+      emissive: new THREE.Color(0xFF5500),
+      emissiveIntensity: 1.5,
+      roughness: 0.25
+    });
+
+    // Задние LED-фонари
+    const taillightMat = new THREE.MeshStandardMaterial({
+      color: 0xFF1428,
+      emissive: new THREE.Color(0xFF0A20),
+      emissiveIntensity: 3.1,
+      roughness: 0.2
+    });
+
+    // ============================================================================
+    // 4. ПОЛ И ОКРУЖЕНИЕ (ОТРАЖЕНИЯ + СТУДИЙНЫЕ/НЕОНОВЫЕ ЛАМПЫ)
+    // ============================================================================
+    const groundGeo = new THREE.CircleGeometry(24, 64);
+    const groundReflector = new Reflector(groundGeo, {
+      clipBias: 0.003,
+      textureWidth: Math.floor(window.innerWidth * Math.min(window.devicePixelRatio, 1.5)),
+      textureHeight: Math.floor(window.innerHeight * Math.min(window.devicePixelRatio, 1.5)),
+      color: 0x20152B
+    });
+    groundReflector.rotation.x = -Math.PI / 2;
+    groundReflector.position.y = 0.0;
+    scene.add(groundReflector);
+
+    const floorOverlayMat = new THREE.MeshPhysicalMaterial({
+      color: 0x0B0510,
+      roughness: 0.14,
+      metalness: 0.1,
+      transparent: true,
+      opacity: 0.66,
+      clearcoat: 1.0,
+      clearcoatRoughness: 0.06
+    });
+    const floorOverlay = new THREE.Mesh(groundGeo, floorOverlayMat);
+    floorOverlay.rotation.x = -Math.PI / 2;
+    floorOverlay.position.y = 0.002;
+    floorOverlay.receiveShadow = true;
+    scene.add(floorOverlay);
+
+    // ============================================================================
+    // 5. КОНТЕЙНЕР АВТОМОБИЛЯ + УЛУЧШЕННЫЙ МАКЕТ AUDI A3 8V ПОД ФОТО
+    // ============================================================================
+    const carRoot = new THREE.Group();
+    scene.add(carRoot);
+
+    const proceduralCarGroup = new THREE.Group();
+    carRoot.add(proceduralCarGroup);
+
+    let loadedGlbGroup = null;
+    let customRestyleEnabled = true;
+
+    // Построение улучшенного сглаженного макета по реальным габаритам (пока не загружен .GLB)
+    function buildProceduralAudiA3() {
+      const wb = 2.637;
+      const frontZ = wb / 2;  // +1.3185
+      const rearZ = -wb / 2;  // -1.3185
+
+      // 1. Нижняя часть кузова со сглаженными бортами
+      const lowerBodyGeo = new RoundedBoxGeometry(1.78, 0.50, 4.38, 10, 0.15);
+      const pos = lowerBodyGeo.attributes.position;
+      const v = new THREE.Vector3();
+      for (let i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i);
+        // Сужение к переднему и заднему бамперу (план-вид настоящей A3)
+        if (v.z > 1.3) {
+          const t = (v.z - 1.3) / 0.9;
+          v.x *= 1.0 - 0.12 * Math.pow(Math.max(0, t), 1.4);
+          if (v.y > 0.1) v.y -= 0.09 * Math.pow(Math.max(0, t), 1.3); // наклон капота
+        }
+        if (v.z < -1.3) {
+          const t = (-1.3 - v.z) / 0.9;
+          v.x *= 1.0 - 0.10 * Math.pow(Math.max(0, t), 1.3);
+        }
+        // Выемка под пороги между арками
+        if (Math.abs(v.z) < 0.95 && v.y < -0.1) {
+          v.x *= 0.96;
+        }
+        pos.setXYZ(i, v.x, v.y, v.z);
+      }
+      lowerBodyGeo.computeVertexNormals();
+      const lowerBody = new THREE.Mesh(lowerBodyGeo, bodyMaterial);
+      lowerBody.position.set(0, 0.50, 0.02);
+      lowerBody.castShadow = true;
+      lowerBody.receiveShadow = true;
+      proceduralCarGroup.add(lowerBody);
+
+      // 2. Рельефный капот со штамповками по бокам
+      const hoodGeo = new RoundedBoxGeometry(1.52, 0.11, 1.32, 8, 0.045);
+      const hPos = hoodGeo.attributes.position;
+      for (let i = 0; i < hPos.count; i++) {
+        v.fromBufferAttribute(hPos, i);
+        const frontFactor = (v.z + 0.66) / 1.32;
+        v.x *= 1.0 - 0.14 * frontFactor;
+        v.y -= 0.075 * frontFactor;
+        // Боковые ребра капота
+        if (Math.abs(v.x) > 0.45 && v.y > 0) v.y += 0.012;
+        hPos.setXYZ(i, v.x, v.y, v.z);
+      }
+      hoodGeo.computeVertexNormals();
+      const hood = new THREE.Mesh(hoodGeo, bodyMaterial);
+      hood.position.set(0, 0.74, 1.40);
+      hood.castShadow = true;
+      proceduralCarGroup.add(hood);
+
+      // 3. Купол крыши и стоек (Greenhouse)
+      const cabinGeo = new RoundedBoxGeometry(1.48, 0.49, 2.38, 10, 0.14);
+      const cPos = cabinGeo.attributes.position;
+      for (let i = 0; i < cPos.count; i++) {
+        v.fromBufferAttribute(cPos, i);
+        if (v.y > 0) {
+          // Сужение крыши кверху
+          v.x *= 0.86;
+          // Наклон лобового стекла и заднего стекла седана
+          if (v.z > 0.35) v.z -= (v.y / 0.25) * 0.44;
+          if (v.z < -0.35) v.z += (v.y / 0.25) * 0.52;
+        }
+        cPos.setXYZ(i, v.x, v.y, v.z);
+      }
+      cabinGeo.computeVertexNormals();
+      const cabinMesh = new THREE.Mesh(cabinGeo, bodyMaterial);
+      cabinMesh.position.set(0, 1.03, -0.14);
+      cabinMesh.castShadow = true;
+      proceduralCarGroup.add(cabinMesh);
+
+      // Глухо тонированное остекление («в бункер», включая лобовое, как на фото)
+      const glassShellGeo = cabinGeo.clone();
+      glassShellGeo.scale(1.008, 0.93, 0.97);
+      const glassShell = new THREE.Mesh(glassShellGeo, bunkerGlassMaterial);
+      glassShell.position.set(0, 1.02, -0.14);
+      proceduralCarGroup.add(glassShell);
+
+      // Панорамная черная вставка на крыше / люк
+      const sunroof = new THREE.Mesh(
+        new RoundedBoxGeometry(1.02, 0.02, 0.72, 4, 0.01),
+        bunkerGlassMaterial
+      );
+      sunroof.position.set(0, 1.275, 0.02);
+      proceduralCarGroup.add(sunroof);
+
+      // Чёрные молдинги вокруг боковых окон (антихром, как на фото)
+      [-0.735, 0.735].forEach((xSide) => {
+        const sillTrim = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.022, 1.88), blackTrimMaterial);
+        sillTrim.position.set(xSide, 0.80, -0.14);
+        proceduralCarGroup.add(sillTrim);
+
+      });
+
+      // Интегрированный спойлер-губа на крышке багажника
+      const lipSpoiler = new THREE.Mesh(
+        new RoundedBoxGeometry(1.30, 0.045, 0.11, 4, 0.018),
+        bodyMaterial
+      );
+      lipSpoiler.position.set(0, 0.81, -2.09);
+      lipSpoiler.rotation.x = 0.22;
+      proceduralCarGroup.add(lipSpoiler);
+
+      // 4. Колесные арки (выпуклые крылья Audi)
+      const archPositions = [
+        [-0.82, 0.36, frontZ],
+        [ 0.82, 0.36, frontZ],
+        [-0.82, 0.36, rearZ],
+        [ 0.82, 0.36, rearZ]
+      ];
+      const archLipMat = bodyMaterial.clone();
+      archLipMat.side = THREE.DoubleSide;
+      const archGapMat = new THREE.MeshBasicMaterial({ color: 0x050507, side: THREE.DoubleSide });
+      archPositions.forEach(([ax, ay, az]) => {
+        const side = Math.sign(ax);
+        // Кромка арки вокруг верхней половины колеса
+        const lip = new THREE.Mesh(new THREE.CylinderGeometry(0.37, 0.37, 0.07, 36, 1, true, 0, Math.PI), archLipMat);
+        lip.rotation.z = Math.PI / 2;
+        lip.position.set(side * 0.894, 0.33, az);
+        proceduralCarGroup.add(lip);
+        // Тёмный зазор между шиной и аркой
+        const gap = new THREE.Mesh(new THREE.RingGeometry(0.33, 0.37, 36, 1, 0, Math.PI), archGapMat);
+        gap.rotation.y = side * Math.PI / 2;
+        gap.position.set(side * 0.892, 0.33, az);
+        proceduralCarGroup.add(gap);
+      });
+
+      // 5. ПЕРЕДНЯЯ ЧАСТЬ ТОЧНО ПО ФОТО:
+      // Трапециевидная решетка Singleframe с хромированной рамкой, горизонтальными ламелями,
+      // шильдиком quattro и передним номером AX 2235 OO
+      const grilleGroup = new THREE.Group();
+      grilleGroup.position.set(0, 0.44, 2.215);
+      grilleGroup.rotation.x = -0.07;
+      proceduralCarGroup.add(grilleGroup);
+
+      const gShape = new THREE.Shape();
+      gShape.moveTo(-0.46,  0.22);
+      gShape.lineTo( 0.46,  0.22);
+      gShape.lineTo( 0.52,  0.07);
+      gShape.lineTo( 0.41, -0.23);
+      gShape.lineTo(-0.41, -0.23);
+      gShape.lineTo(-0.52,  0.07);
+      gShape.closePath();
+
+      const gInsert = new THREE.Mesh(
+        new THREE.ExtrudeGeometry(gShape, { depth: 0.03, bevelEnabled: false }),
+        blackTrimMaterial
+      );
+      gInsert.position.z = -0.02;
+      grilleGroup.add(gInsert);
+
+      // Хромированный кант решетки Singleframe
+      const frameShape = gShape.clone();
+      const holePath = new THREE.Path();
+      const s = 0.91;
+      holePath.moveTo(-0.46 * s,  0.22 * s);
+      holePath.lineTo( 0.46 * s,  0.22 * s);
+      holePath.lineTo( 0.52 * s,  0.07 * s);
+      holePath.lineTo( 0.41 * s, -0.23 * s);
+      holePath.lineTo(-0.41 * s, -0.23 * s);
+      holePath.lineTo(-0.52 * s,  0.07 * s);
+      holePath.closePath();
+      frameShape.holes.push(holePath);
+
+      const chromeFrame = new THREE.Mesh(
+        new THREE.ExtrudeGeometry(frameShape, { depth: 0.035, bevelEnabled: true, bevelSize: 0.006, bevelThickness: 0.006 }),
+        chromeMaterial
+      );
+      chromeFrame.position.z = -0.015;
+      grilleGroup.add(chromeFrame);
+
+      // Горизонтальные ламели решетки
+      for (let row = -3; row <= 3; row++) {
+        const y = row * 0.055;
+        const w = row > 1 ? 0.88 : 0.84;
+        const slat = new THREE.Mesh(new THREE.BoxGeometry(w, 0.012, 0.025), blackTrimMaterial);
+        slat.position.set(0, y, 0.008);
+        grilleGroup.add(slat);
+      }
+
+      // 4 хромированных кольца Audi
+      const ringsGroup = new THREE.Group();
+      ringsGroup.position.set(0, 0.125, 0.024);
+      [-0.105, -0.035, 0.035, 0.105].forEach((rx) => {
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(0.044, 0.0065, 14, 32), chromeMaterial);
+        ring.position.x = rx;
+        ringsGroup.add(ring);
+      });
+      grilleGroup.add(ringsGroup);
+
+      // Шильдик quattro на решетке (слева по ходу / справа если смотреть спереди, как на фото)
+      const quattroMesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.13, 0.032),
+        new THREE.MeshBasicMaterial({ map: createQuattroBadgeTexture() })
+      );
+      quattroMesh.position.set(-0.27, 0.095, 0.024);
+      grilleGroup.add(quattroMesh);
+
+      // Передний украинский номер AX 2235 OO (с твоего фото)
+      const frontPlateTex = createUkrainianPlateTexture('AX 2235 OO', 'Audi   quattro');
+      const frontPlateHolder = new THREE.Mesh(
+        new RoundedBoxGeometry(0.53, 0.135, 0.022, 2, 0.006),
+        blackTrimMaterial
+      );
+      frontPlateHolder.position.set(0, -0.055, 0.022);
+      grilleGroup.add(frontPlateHolder);
+
+      const frontPlatePlane = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.51, 0.125),
+        new THREE.MeshStandardMaterial({ map: frontPlateTex, roughness: 0.35, metalness: 0.08 })
+      );
+      frontPlatePlane.position.set(0, -0.055, 0.035);
+      grilleGroup.add(frontPlatePlane);
+
+      // Боковые воздухозаборники переднего бампера (базовый сток с горизонтальными ребрами, как на фото)
+      [-0.63, 0.63].forEach((bx) => {
+        const intake = new THREE.Mesh(new RoundedBoxGeometry(0.34, 0.13, 0.06, 2, 0.015), blackTrimMaterial);
+        intake.position.set(bx, 0.31, 2.13);
+        intake.rotation.y = bx > 0 ? -0.26 : 0.26;
+        proceduralCarGroup.add(intake);
+
+        // Горизонтальная перемычка внутри боковой решетки
+        const intakeRib = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.018, 0.07), bodyMaterial);
+        intakeRib.position.set(bx, 0.31, 2.135);
+        intakeRib.rotation.y = bx > 0 ? -0.26 : 0.26;
+        proceduralCarGroup.add(intakeRib);
+      });
+
+      // Нижняя губа переднего бампера в цвет кузова
+      const frontChin = new THREE.Mesh(new RoundedBoxGeometry(1.56, 0.042, 0.24, 4, 0.015), bodyMaterial);
+      frontChin.position.set(0, 0.21, 2.10);
+      proceduralCarGroup.add(frontChin);
+
+      // 6. ПЕРЕДНИЕ ФАРЫ ДОРЕСТАЙЛ US-SPEC (с оранжевыми «рыжиками» по краям и верхней бровью ДХО)
+      [-1, 1].forEach((side) => {
+        const hlGroup = new THREE.Group();
+        hlGroup.position.set(side * 0.62, 0.60, 2.08);
+        hlGroup.rotation.y = side * -0.28;
+        hlGroup.rotation.x = 0.06;
+        proceduralCarGroup.add(hlGroup);
+
+        // Тёмный корпус фары
+        const housing = new THREE.Mesh(new RoundedBoxGeometry(0.36, 0.13, 0.16, 4, 0.02), blackTrimMaterial);
+        hlGroup.add(housing);
+
+        // Верхняя и внутренняя Г-образная ресничка ДХО (как на фото)
+        const drlTop = new THREE.Mesh(new THREE.BoxGeometry(0.31, 0.016, 0.165), drlMat);
+        drlTop.position.set(-side * 0.015, 0.048, 0.005);
+        drlTop.rotation.z = side * -0.05;
+        hlGroup.add(drlTop);
+
+        const drlInner = new THREE.Mesh(new THREE.BoxGeometry(0.016, 0.075, 0.165), drlMat);
+        drlInner.position.set(-side * 0.155, 0.015, 0.005);
+        hlGroup.add(drlInner);
+
+        // Линза ксенона
+        const xenon = new THREE.Mesh(new THREE.SphereGeometry(0.036, 16, 16), projectorMat);
+        xenon.position.set(-side * 0.02, -0.005, 0.065);
+        hlGroup.add(xenon);
+
+        // Американский оранжевый боковой катафот («рыжик» во внешнем углу фары)
+        const amberReflector = new THREE.Mesh(new THREE.BoxGeometry(0.048, 0.105, 0.164), usAmberMat);
+        amberReflector.position.set(side * 0.15, -0.004, 0.004);
+        amberReflector.rotation.z = side * 0.18;
+        hlGroup.add(amberReflector);
+
+        // Прозрачный колпак фары
+        const lens = new THREE.Mesh(new RoundedBoxGeometry(0.365, 0.134, 0.168, 4, 0.02), headlightLensMat);
+        hlGroup.add(lens);
+      });
+
+      // 7. ЗАДНЯЯ ЧАСТЬ: широкие фонари, номер KE 2929 AE и сдвоенный выхлоп слева
+      [-1, 1].forEach((side) => {
+        const tlGroup = new THREE.Group();
+        tlGroup.position.set(side * 0.56, 0.67, -2.14);
+        tlGroup.rotation.y = side * 0.16;
+        proceduralCarGroup.add(tlGroup);
+
+        const tlHousing = new THREE.Mesh(new RoundedBoxGeometry(0.38, 0.115, 0.10, 4, 0.02), blackTrimMaterial);
+        tlGroup.add(tlHousing);
+
+        const tlBarOuter = new THREE.Mesh(new RoundedBoxGeometry(0.35, 0.032, 0.106, 2, 0.008), taillightMat);
+        tlBarOuter.position.set(0, 0.024, 0);
+        tlGroup.add(tlBarOuter);
+
+        const tlBarLower = new THREE.Mesh(new RoundedBoxGeometry(0.26, 0.022, 0.106, 2, 0.006), taillightMat);
+        tlBarLower.position.set(side * 0.04, -0.022, 0);
+        tlGroup.add(tlBarLower);
+      });
+
+      // Задний номер KE 2929 AE
+      const rearPlateTex = createUkrainianPlateTexture('KE 2929 AE', 'Audi Sport');
+      const rearPlateMesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.51, 0.125),
+        new THREE.MeshStandardMaterial({ map: rearPlateTex, roughness: 0.35, metalness: 0.08 })
+      );
+      rearPlateMesh.position.set(0, 0.56, -2.195);
+      rearPlateMesh.rotation.y = Math.PI;
+      proceduralCarGroup.add(rearPlateMesh);
+
+      // Задний диффузор и 2 круглые хромированные трубы СЛЕВА
+      const rearValance = new THREE.Mesh(new RoundedBoxGeometry(1.48, 0.13, 0.12, 4, 0.03), blackTrimMaterial);
+      rearValance.position.set(0, 0.27, -2.13);
+      proceduralCarGroup.add(rearValance);
+
+      [-0.50, -0.40].forEach((exX) => {
+        const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.036, 0.18, 24), chromeMaterial);
+        pipe.rotation.x = Math.PI / 2;
+        pipe.position.set(exX, 0.24, -2.18);
+        proceduralCarGroup.add(pipe);
+      });
+
+      // 8. Боковые зеркала на ножках (в цвет кузова + черная ножка, как на фото)
+      [-1, 1].forEach((side) => {
+        const mirrorCap = new THREE.Mesh(new RoundedBoxGeometry(0.17, 0.095, 0.12, 4, 0.035), bodyMaterial);
+        mirrorCap.position.set(side * 0.89, 0.84, 0.58);
+        mirrorCap.rotation.y = side * -0.2;
+        proceduralCarGroup.add(mirrorCap);
+
+        const mirrorStalk = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.06, 0.04), blackTrimMaterial);
+        mirrorStalk.position.set(side * 0.81, 0.79, 0.60);
+        proceduralCarGroup.add(mirrorStalk);
+      });
+
+      // 9. ЧЕРНЫЕ МНОГОСПИЦЕВЫЕ ЛЕГКОСПЛАВНЫЕ ДИСКИ (как на твоем фото)
+      const wheelCoords = [
+        [-0.80, 0.33, frontZ],
+        [ 0.80, 0.33, frontZ],
+        [-0.80, 0.33, rearZ],
+        [ 0.80, 0.33, rearZ]
+      ];
+      const tireSideMat = tireMaterial.clone();
+      tireSideMat.side = THREE.DoubleSide;
+      const wheelDepthMat = new THREE.MeshStandardMaterial({ color: 0x08080A, roughness: 0.7, side: THREE.DoubleSide });
+      wheelCoords.forEach(([wx, wy, wz]) => {
+        const wGroup = new THREE.Group();
+        wGroup.position.set(wx, wy, wz);
+        const isRight = wx > 0;
+
+        // Шина: протектор + боковины (полые, чтобы диск было видно)
+        const tread = new THREE.Mesh(new THREE.CylinderGeometry(0.33, 0.33, 0.235, 40, 1, true), tireMaterial);
+        tread.rotation.z = Math.PI / 2;
+        tread.castShadow = true;
+        wGroup.add(tread);
+        [-1, 1].forEach((sd) => {
+          const wall = new THREE.Mesh(new THREE.RingGeometry(0.245, 0.33, 40), tireSideMat);
+          wall.rotation.y = sd * Math.PI / 2;
+          wall.position.x = sd * 0.1175;
+          wGroup.add(wall);
+        });
+
+        // Обод: полая бочка + тёмная глубина за спицами
+        const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.245, 0.245, 0.236, 32, 1, true), blackAlloyMaterial);
+        rim.rotation.z = Math.PI / 2;
+        wGroup.add(rim);
+        const rimBack = new THREE.Mesh(new THREE.CircleGeometry(0.245, 32), wheelDepthMat);
+        rimBack.rotation.y = isRight ? Math.PI / 2 : -Math.PI / 2;
+        rimBack.position.x = isRight ? 0.098 : -0.098;
+        wGroup.add(rimBack);
+
+        // Тормозной диск внутри
+        const brakeRotor = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.19, 0.03, 24), rotorMaterial);
+        brakeRotor.rotation.z = Math.PI / 2;
+        brakeRotor.position.x = isRight ? -0.03 : 0.03;
+        wGroup.add(brakeRotor);
+
+        // 10 черных спиц (5 сдвоенных V-спиц, как на черных дисках с фото)
+        const spokeCount = 10;
+        for (let s = 0; s < spokeCount; s++) {
+          const angle = (s / spokeCount) * Math.PI * 2;
+          const spoke = new THREE.Mesh(new RoundedBoxGeometry(0.022, 0.22, 0.026, 2, 0.005), blackAlloyMaterial);
+          spoke.position.x = isRight ? 0.108 : -0.108;
+          spoke.position.y = Math.cos(angle) * 0.11;
+          spoke.position.z = Math.sin(angle) * 0.11;
+          spoke.rotation.x = angle + (s % 2 === 0 ? 0.08 : -0.08);
+          wGroup.add(spoke);
+        }
+
+        // Центральный колпачок ступицы
+        const centerCap = new THREE.Mesh(new THREE.CylinderGeometry(0.048, 0.048, 0.25, 20), blackAlloyMaterial);
+        centerCap.rotation.z = Math.PI / 2;
+        wGroup.add(centerCap);
+
+        proceduralCarGroup.add(wGroup);
+      });
+    }
+
+    buildProceduralAudiA3();
+
+    // ============================================================================
+    // 6. ЗАГРУЗЧИК НАСТОЯЩИХ 3D-МОДЕЛЕЙ (.GLB / .GLTF) + АВТО-ТЮНИНГ ПОД ФОТО
+    // ============================================================================
+    const gltfLoader = new GLTFLoader();
+    const dracoLoader = new DRACOLoader();
+    dracoLoader.setDecoderPath('https://unpkg.com/three@0.160.0/examples/jsm/libs/draco/');
+    gltfLoader.setDRACOLoader(dracoLoader);
+    gltfLoader.setMeshoptDecoder(MeshoptDecoder);
+
+    // Сохраняем оригинальные материалы загруженной модели, чтобы можно было переключать
+    const originalMaterialsMap = new Map();
+
+    // Украинский номер KE 2929 AE на штатных номерных площадках модели
+    let ukPlateMat = null;
+    function getPlateMat() {
+      if (!ukPlateMat) {
+        const t = createUkrainianPlateTexture('KE 2929 AE', '');
+        t.flipY = false; // UV-развёртка glTF
+        ukPlateMat = new THREE.MeshStandardMaterial({ map: t, roughness: 0.35, metalness: 0.05 });
+      }
+      return ukPlateMat;
+    }
+
+    // Светящиеся копии материалов фар
+    const glowMats = [];
+    const glowCache = new Map();
+    function getGlow(orig, hex, power) {
+      if (glowCache.has(orig.uuid)) return glowCache.get(orig.uuid);
+      const m = orig.clone();
+      m.emissive = new THREE.Color(hex);
+      m.userData.glowOn = power;
+      m.emissiveIntensity = lightsEnabled ? power : 0;
+      glowCache.set(orig.uuid, m);
+      glowMats.push(m);
+      return m;
+    }
+
+    function applyPhotoStyleToLoadedModel(rootObj, useCustomStyle) {
+      rootObj.traverse((child) => {
+        if (!child.isMesh) return;
+        child.castShadow = true;
+        child.receiveShadow = true;
+
+        if (!originalMaterialsMap.has(child.uuid)) {
+          originalMaterialsMap.set(child.uuid, child.material);
+        }
+
+        if (!useCustomStyle) {
+          child.material = originalMaterialsMap.get(child.uuid);
+          return;
+        }
+
+        const origMat = originalMaterialsMap.get(child.uuid);
+        const matName = (origMat?.name || '').toLowerCase();
+
+        // Точные имена материалов встроенной модели S3 8V
+        if (matName === 'material_23' || matName === 'rimlogo') { child.material = blackAlloyMaterial; return; }
+        if (matName === 'vidros' || matName === 'windows_int') { child.material = bunkerGlassMaterial; return; }
+        if (matName === 'carpaint') { child.material = bodyMaterial; return; }
+        if (matName === 'tyre') { child.material = tireMaterial; return; }
+        if (matName === 'flights') { child.material = getGlow(origMat, 0xFFF1D6, 0.6); return; }
+        if (matName === 'ext_plate_plastic') { child.material = getPlateMat(); return; }
+        const meshName = (child.name || '').toLowerCase();
+        const combined = `${matName} ${meshName}`;
+
+        // 1. Определение стекол -> глухая бункерная тонировка
+        if (
+          combined.includes('glass') ||
+          combined.includes('window') ||
+          combined.includes('windshield') ||
+          combined.includes('vitre') ||
+          combined.includes('vidro') ||
+          combined.includes('cristal') ||
+          (origMat && origMat.transparent && origMat.opacity < 0.75 && !combined.includes('light') && !combined.includes('lens'))
+        ) {
+          child.material = bunkerGlassMaterial;
+        }
+        // 2. Определение кузовной краски -> LX7R Monsoon Gray Metallic
+        else if (
+          combined.includes('paint') ||
+          combined.includes('carpaint') ||
+          combined.includes('body') ||
+          combined.includes('carroserie') ||
+          combined.includes('exterior') ||
+          combined.includes('shell') ||
+          combined.includes('hood') ||
+          combined.includes('door') ||
+          combined.includes('fender') ||
+          combined.includes('bumper')
+        ) {
+          child.material = bodyMaterial;
+        }
+        // 3. Определение колёсных дисков -> Чёрные диски как на фото
+        else if (
+          combined.includes('rim') ||
+          combined.includes('wheel') ||
+          combined.includes('alloy') ||
+          combined.includes('spoke') ||
+          combined.includes('jante')
+        ) {
+          if (!combined.includes('tire') && !combined.includes('tyre') && !combined.includes('rubber')) {
+            child.material = blackAlloyMaterial;
+          }
+        }
+        // 4. Резина
+        else if (combined.includes('tire') || combined.includes('tyre') || combined.includes('rubber') || combined.includes('pneu')) {
+          child.material = tireMaterial;
+        }
+      });
+    }
+
+    function loadGlbFromBuffer(arrayBuffer, fileName) {
+      const spinner = document.getElementById('loader-spinner');
+      const statusEl = document.getElementById('model-status');
+      spinner.style.display = 'inline';
+
+      gltfLoader.parse(
+        arrayBuffer,
+        '',
+        (gltf) => {
+          spinner.style.display = 'none';
+
+          // Убираем предыдущую модель
+          if (loadedGlbGroup) {
+            carRoot.remove(loadedGlbGroup);
+          }
+          proceduralCarGroup.visible = false;
+
+          loadedGlbGroup = gltf.scene;
+
+          // Вычисляем габариты и масштабируем точно под длину Audi A3 Sedan (4.456 м)
+          const box = new THREE.Box3().setFromObject(loadedGlbGroup);
+          const size = new THREE.Vector3();
+          const center = new THREE.Vector3();
+          box.getSize(size);
+          box.getCenter(center);
+
+          const maxHorizontal = Math.max(size.x, size.z, 0.001);
+          const scaleFactor = 4.456 / maxHorizontal;
+          loadedGlbGroup.scale.setScalar(scaleFactor);
+
+          // Пересчитываем бокс после масштабирования и ставим колеса ровно на Y = 0
+          const scaledBox = new THREE.Box3().setFromObject(loadedGlbGroup);
+          const scaledCenter = new THREE.Vector3();
+          scaledBox.getCenter(scaledCenter);
+
+          loadedGlbGroup.position.x -= scaledCenter.x;
+          loadedGlbGroup.position.z -= scaledCenter.z;
+          loadedGlbGroup.position.y -= scaledBox.min.y;
+
+          originalMaterialsMap.clear();
+          applyPhotoStyleToLoadedModel(loadedGlbGroup, customRestyleEnabled);
+
+          carRoot.add(loadedGlbGroup);
+          statusEl.textContent = `${fileName} · масштаб 1:1, длина 4456 мм`;
+
+          // Перестраиваем шапки пены по реальным точкам нового кузова
+          rebuildCarWashFoamOnMesh(loadedGlbGroup);
+        },
+        (err) => {
+          spinner.style.display = 'none';
+          if (!loadedGlbGroup) proceduralCarGroup.visible = true;
+          statusEl.textContent = 'Не удалось открыть файл: ' + (err && err.message ? err.message : 'неизвестная ошибка') + '. Если модель сжата Draco, пересохрани её без сжатия.';
+        }
+      );
+    }
+
+    // Обработка кнопки выбора файла
+    const fileInput = document.getElementById('file-input');
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => loadGlbFromBuffer(ev.target.result, file.name);
+      reader.readAsArrayBuffer(file);
+    });
+
+    // Обработка Drag & Drop прямо в окно браузера
+    const dropOverlay = document.getElementById('drop-overlay');
+    window.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropOverlay.classList.add('active');
+    });
+    window.addEventListener('dragleave', (e) => {
+      if (e.relatedTarget === null) dropOverlay.classList.remove('active');
+    });
+    window.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropOverlay.classList.remove('active');
+      const file = e.dataTransfer.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => loadGlbFromBuffer(ev.target.result, file.name);
+      reader.readAsArrayBuffer(file);
+    });
+
+    // ============================================================================
+    // 7. ОСВЕЩЕНИЕ И РЕЖИМЫ (ACID / STUDIO / CAR WASH)
+    // ============================================================================
+    const ambientLight = new THREE.AmbientLight(0x28183A, 1.3);
+    scene.add(ambientLight);
+
+    const hemiLight = new THREE.HemisphereLight(0xB898FF, 0x0B0510, 1.1);
+    scene.add(hemiLight);
+
+    // Контровой маджента (#FF48D6)
+    const magentaRim = new THREE.SpotLight(0xFF48D6, 24, 18, Math.PI / 3, 0.6, 1.5);
+    magentaRim.position.set(-4.2, 3.2, 2.8);
+    magentaRim.castShadow = true;
+    scene.add(magentaRim);
+
+    // Контровой электро-фиолетовый (#A874FF)
+    const violetRim = new THREE.SpotLight(0xA874FF, 22, 18, Math.PI / 3, 0.6, 1.5);
+    violetRim.position.set(4.2, 3.4, -2.8);
+    scene.add(violetRim);
+
+    // Акцентный кислотно-лаймовый (#D8FF3E)
+    const limeAccent = new THREE.PointLight(0xD8FF3E, 10, 10);
+    limeAccent.position.set(2.5, 1.1, 3.2);
+    scene.add(limeAccent);
+
+    // Студийный верхний софтбокс
+    const studioKey = new THREE.DirectionalLight(0xFFFFFF, 1.5);
+    studioKey.position.set(-2.5, 6.0, 3.5);
+    studioKey.castShadow = true;
+    scene.add(studioKey);
+
+    // Неоновые световые трубки над машиной
+    const neonBarMat1 = new THREE.MeshBasicMaterial({ color: 0xFF48D6 });
+    const neonBarMat2 = new THREE.MeshBasicMaterial({ color: 0xA874FF });
+    const neonBar1 = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 4.4, 12), neonBarMat1);
+    neonBar1.rotation.x = Math.PI / 2;
+    neonBar1.position.set(-1.35, 2.35, 0);
+    scene.add(neonBar1);
+
+    const neonBar2 = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 4.4, 12), neonBarMat2);
+    neonBar2.rotation.x = Math.PI / 2;
+    neonBar2.position.set(1.35, 2.35, 0);
+    scene.add(neonBar2);
+
+    // Пучки света фар
+    const headlightSpotL = new THREE.SpotLight(0xFFF4D8, 12, 14, 0.48, 0.65, 1.6);
+    headlightSpotL.position.set(-0.62, 0.60, 2.15);
+    headlightSpotL.target.position.set(-0.8, 0.0, 7.5);
+    scene.add(headlightSpotL);
+    scene.add(headlightSpotL.target);
+
+    const headlightSpotR = new THREE.SpotLight(0xFFF4D8, 12, 14, 0.48, 0.65, 1.6);
+    headlightSpotR.position.set(0.62, 0.60, 2.15);
+    headlightSpotR.target.position.set(0.8, 0.0, 7.5);
+    scene.add(headlightSpotR);
+    scene.add(headlightSpotR.target);
+
+    const tailGlowLight = new THREE.PointLight(0xFF1428, 4.5, 3.5);
+    tailGlowLight.position.set(0, 0.62, -2.35);
+    scene.add(tailGlowLight);
+
+    // ============================================================================
+    // 8. РЕЖИМ МОЙКИ САМООБСЛУЖИВАНИЯ (РОЗОВАЯ ПЕНА НА КУЗОВЕ + ПАДАЮЩИЕ ХЛОПЬЯ)
+    // ============================================================================
+    const foamGroup = new THREE.Group();
+    foamGroup.visible = false;
+    scene.add(foamGroup);
+
+    const pinkFoamMat = new THREE.MeshPhysicalMaterial({
+      color: 0xFF77D4,
+      emissive: 0x3A082C,
+      emissiveIntensity: 0.35,
+      roughness: 0.75,
+      metalness: 0.0,
+      clearcoat: 0.35
+    });
+    const whiteFoamMat = new THREE.MeshPhysicalMaterial({
+      color: 0xFFE8F7,
+      roughness: 0.82,
+      metalness: 0.0,
+      clearcoat: 0.25
+    });
+
+    const foamBlobGeo = new THREE.SphereGeometry(1, 10, 10);
+    const foamCount = 520;
+    const foamInstancedPink = new THREE.InstancedMesh(foamBlobGeo, pinkFoamMat, foamCount);
+    const foamInstancedWhite = new THREE.InstancedMesh(foamBlobGeo, whiteFoamMat, foamCount);
+    foamGroup.add(foamInstancedPink);
+    foamGroup.add(foamInstancedWhite);
+
+    function rebuildCarWashFoamOnMesh(targetGroup) {
+      const dummy = new THREE.Object3D();
+      const box = new THREE.Box3().setFromObject(targetGroup);
+
+      for (let i = 0; i < foamCount; i++) {
+        const z = THREE.MathUtils.lerp(box.min.z * 0.92, box.max.z * 0.92, Math.random());
+        const isCabin = z > -0.95 && z < 0.75;
+        const maxW = isCabin ? 0.66 : 0.82;
+        const x = (Math.random() - 0.5) * 2 * maxW;
+        let y = isCabin ? 0.95 + Math.random() * 0.32 : 0.55 + Math.random() * 0.26;
+
+        dummy.position.set(x, y, z);
+        const s = 0.045 + Math.random() * 0.085;
+        dummy.scale.set(s * 1.35, s * 0.72, s * 1.25);
+        dummy.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, 0);
+        dummy.updateMatrix();
+        foamInstancedPink.setMatrixAt(i, dummy.matrix);
+
+        dummy.position.x += (Math.random() - 0.5) * 0.1;
+        dummy.position.z += (Math.random() - 0.5) * 0.1;
+        dummy.scale.multiplyScalar(0.8);
+        dummy.updateMatrix();
+        foamInstancedWhite.setMatrixAt(i, dummy.matrix);
+      }
+      foamInstancedPink.instanceMatrix.needsUpdate = true;
+      foamInstancedWhite.instanceMatrix.needsUpdate = true;
+    }
+
+    rebuildCarWashFoamOnMesh(proceduralCarGroup);
+
+    // Падающие частицы розовой пены
+    const particleCount = 420;
+    const pGeo = new THREE.BufferGeometry();
+    const pPositions = new Float32Array(particleCount * 3);
+    const pSpeeds = new Float32Array(particleCount);
+    for (let i = 0; i < particleCount; i++) {
+      pPositions[i * 3] = (Math.random() - 0.5) * 3.8;
+      pPositions[i * 3 + 1] = Math.random() * 2.8;
+      pPositions[i * 3 + 2] = (Math.random() - 0.5) * 5.2;
+      pSpeeds[i] = 0.5 + Math.random() * 0.9;
+    }
+    pGeo.setAttribute('position', new THREE.BufferAttribute(pPositions, 3));
+    const pMat = new THREE.PointsMaterial({
+      color: 0xFF92DF,
+      size: 0.055,
+      transparent: true,
+      opacity: 0.85
+    });
+    const foamParticles = new THREE.Points(pGeo, pMat);
+    foamGroup.add(foamParticles);
+
+    // ============================================================================
+    // 9. ПЕРЕКЛЮЧЕНИЕ РЕЖИМОВ И КНОПОК ИНТЕРФЕЙСА
+    // ============================================================================
+    let currentMode = 'acid';
+    let lightsEnabled = true;
+
+    function setSceneMode(mode) {
+      currentMode = mode;
+      document.querySelectorAll('[data-mode]').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.mode === mode);
+      });
+
+      if (mode === 'studio') {
+        scene.background.setHex(0x1E2026);
+        scene.fog.color.setHex(0x1E2026);
+        scene.fog.density = 0.022;
+        floorOverlayMat.color.setHex(0x23262E);
+        floorOverlayMat.roughness = 0.35;
+        floorOverlayMat.opacity = 0.85;
+
+        ambientLight.color.setHex(0xFFFFFF);
+        ambientLight.intensity = 1.9;
+        hemiLight.color.setHex(0xFFFFFF);
+        hemiLight.groundColor.setHex(0x2A2D34);
+        hemiLight.intensity = 1.6;
+        studioKey.intensity = 2.8;
+
+        magentaRim.intensity = 4;
+        violetRim.intensity = 4;
+        limeAccent.intensity = 0;
+        neonBar1.visible = false;
+        neonBar2.visible = false;
+        foamGroup.visible = false;
+        bloomPass.strength = 0.22;
+      } else if (mode === 'acid') {
+        scene.background.setHex(0x0B0510);
+        scene.fog.color.setHex(0x0B0510);
+        scene.fog.density = 0.042;
+        floorOverlayMat.color.setHex(0x0B0510);
+        floorOverlayMat.roughness = 0.14;
+        floorOverlayMat.opacity = 0.66;
+
+        ambientLight.color.setHex(0x28183A);
+        ambientLight.intensity = 1.3;
+        hemiLight.color.setHex(0xB898FF);
+        hemiLight.groundColor.setHex(0x0B0510);
+        hemiLight.intensity = 1.1;
+        studioKey.intensity = 1.5;
+
+        magentaRim.intensity = 24;
+        violetRim.intensity = 22;
+        limeAccent.intensity = 10;
+        neonBar1.visible = true;
+        neonBar2.visible = true;
+        foamGroup.visible = false;
+        bloomPass.strength = 0.52;
+      } else if (mode === 'wash') {
+        scene.background.setHex(0x0E0516);
+        scene.fog.color.setHex(0x0E0516);
+        scene.fog.density = 0.052;
+        floorOverlayMat.color.setHex(0x14071E);
+        floorOverlayMat.roughness = 0.08;
+        floorOverlayMat.opacity = 0.58;
+
+        ambientLight.color.setHex(0x3A1846);
+        ambientLight.intensity = 1.5;
+        studioKey.intensity = 1.1;
+
+        magentaRim.intensity = 45;
+        violetRim.intensity = 38;
+        limeAccent.intensity = 12;
+        neonBar1.visible = true;
+        neonBar2.visible = true;
+        foamGroup.visible = true;
+        bloomPass.strength = 0.58;
+      }
+    }
+
+    document.querySelectorAll('[data-mode]').forEach((btn) => {
+      btn.addEventListener('click', () => setSceneMode(btn.dataset.mode));
+    });
+
+    // Переключатель фар и фонарей
+    const toggleLightsBtn = document.getElementById('toggle-lights');
+    toggleLightsBtn.addEventListener('click', () => {
+      lightsEnabled = !lightsEnabled;
+      toggleLightsBtn.classList.toggle('toggle-on', lightsEnabled);
+      toggleLightsBtn.querySelector('span:last-child').textContent = lightsEnabled ? 'Оптика: ВКЛ' : 'Оптика: ВЫКЛ';
+
+      drlMat.emissiveIntensity = lightsEnabled ? 3.0 : 0.0;
+      projectorMat.emissiveIntensity = lightsEnabled ? 2.2 : 0.0;
+      usAmberMat.emissiveIntensity = lightsEnabled ? 1.5 : 0.0;
+      taillightMat.emissiveIntensity = lightsEnabled ? 3.1 : 0.0;
+      headlightSpotL.visible = lightsEnabled;
+      headlightSpotR.visible = lightsEnabled;
+      tailGlowLight.visible = lightsEnabled;
+      glowMats.forEach((m) => { m.emissiveIntensity = lightsEnabled ? m.userData.glowOn : 0; });
+    });
+
+    // Переключатель авто-покраски загруженной .GLB модели под фото
+    const toggleRestyleBtn = document.getElementById('toggle-restyle');
+    toggleRestyleBtn.addEventListener('click', () => {
+      customRestyleEnabled = !customRestyleEnabled;
+      toggleRestyleBtn.classList.toggle('toggle-on', customRestyleEnabled);
+      toggleRestyleBtn.querySelector('span:last-child').textContent = customRestyleEnabled
+        ? 'Стиль под фото: ВКЛ'
+        : 'Стиль под фото: ВЫКЛ';
+      if (loadedGlbGroup) {
+        applyPhotoStyleToLoadedModel(loadedGlbGroup, customRestyleEnabled);
+      }
+    });
+
+    // ============================================================================
+    // 10. РЕСАЙЗ И ОСНОВНОЙ ЦИКЛ РЕНДЕРИНГА (60 FPS)
+    // ============================================================================
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      composer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    const clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = Math.min(clock.getDelta(), 0.1);
+
+      controls.update();
+
+      // Анимация падающей пены в режиме Car Wash
+      if (currentMode === 'wash') {
+        const posAttr = pGeo.attributes.position;
+        for (let i = 0; i < particleCount; i++) {
+          let y = posAttr.getY(i) - pSpeeds[i] * dt;
+          if (y < 0.02) y = 2.6 + Math.random() * 0.4;
+          posAttr.setY(i, y);
+        }
+        posAttr.needsUpdate = true;
+      }
+
+      composer.render();
+    }
+
+    animate();
+
+    // Встроенная модель: 2014 Audi S3 Limousine (8V) — tonielpro520, CC BY
+    proceduralCarGroup.visible = false;
+    fetch('audi-s3-8v.b64.txt')
+      .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+      .then((b64) => {
+        const bin = atob(b64.trim());
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        return bytes.buffer;
+      })
+      .then((buf) => loadGlbFromBuffer(buf, 'Audi S3 Limousine 8V'))
+      .catch(() => {
+        proceduralCarGroup.visible = true;
+        document.getElementById('model-status').textContent = 'Модель не загрузилась, показан упрощённый макет.';
+      });
+  </script>
+
+</body></html>
