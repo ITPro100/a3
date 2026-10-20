@@ -1070,16 +1070,70 @@
     // Сохраняем оригинальные материалы загруженной модели, чтобы можно было переключать
     const originalMaterialsMap = new Map();
 
-    // Украинский номер KE 2929 AE на штатных номерных площадках модели
-    let ukPlateMat = null;
-    function getPlateMat() {
-      if (!ukPlateMat) {
-        const t = createUkrainianPlateTexture('KE 2929 AE', '');
-        t.flipY = false; // UV-развёртка glTF
-        ukPlateMat = new THREE.MeshStandardMaterial({ map: t, roughness: 0.35, metalness: 0.05 });
+    // Украинские номера на штатных номерных площадках модели: спереди AX 2235 OO, сзади KE 2929 AE.
+    // flipY оставляем по умолчанию: родная текстура номера в модели хранится перевёрнутой по вертикали.
+    // UV площадок лежат в v = 1…2 (у glTF повтор текстуры по умолчанию), поэтому нужен RepeatWrapping.
+    const plateMats = new Map();
+    function getPlateMat(plateText) {
+      if (!plateMats.has(plateText)) {
+        const map = createUkrainianPlateTexture(plateText, '');
+        map.wrapS = THREE.RepeatWrapping;
+        map.wrapT = THREE.RepeatWrapping;
+        plateMats.set(plateText, new THREE.MeshStandardMaterial({
+          map,
+          roughness: 0.35,
+          metalness: 0.05,
+          side: THREE.DoubleSide
+        }));
       }
-      return ukPlateMat;
+      return plateMats.get(plateText);
     }
+
+    // В модели один материал покрывает детали по всей машине (скло фар и окон, оба номера…).
+    // Делим треугольники меша на группы по их положению: classify(центр треугольника) -> номер группы.
+    // Порядок индексов меняется один раз; с обычным (не массивом) материалом меш рисуется как раньше.
+    function splitMeshByRegion(mesh, classify, groupCount) {
+      if (mesh.userData.regionSplit) return;
+      const geo = mesh.geometry;
+      const pos = geo.attributes.position;
+      if (!geo.index) geo.setIndex([...Array(pos.count).keys()]);
+      const idx = geo.index.array;
+      const parts = Array.from({ length: groupCount }, () => []);
+      const v = new THREE.Vector3();
+      const c = new THREE.Vector3();
+      for (let t = 0; t < idx.length; t += 3) {
+        c.set(0, 0, 0);
+        for (let k = 0; k < 3; k++) c.add(v.fromBufferAttribute(pos, idx[t + k]));
+        c.divideScalar(3).applyMatrix4(mesh.matrixWorld);
+        parts[classify(c)].push(idx[t], idx[t + 1], idx[t + 2]);
+      }
+      idx.set(parts.flat());
+      geo.index.needsUpdate = true;
+      geo.clearGroups();
+      let start = 0;
+      parts.forEach((part, i) => {
+        geo.addGroup(start, part.length, i);
+        start += part.length;
+      });
+      mesh.userData.regionSplit = true;
+    }
+
+    // Зоны по длине кузова 4.456 м (z от -2.23 сзади до +2.23 спереди), ниже линии окон
+    const FRONT = 0, REAR = 1, OTHER = 2;
+    const lampArea = (p) => (p.y >= 1.0 ? OTHER : p.z > 1.55 ? FRONT : p.z < -1.86 ? REAR : OTHER);
+    const frontOrRear = (p) => (p.z > 0 ? FRONT : REAR);
+    // Красные секции задних фонарей — верхний пояс над шильдиком S3
+    const rearLampRed = (p) => (p.z < -1.86 && p.y > 0.8 && p.y < 1.0 ? 0 : 1);
+
+    // Колпак задних фонарей — прозрачный красный
+    const rearLensMat = new THREE.MeshPhysicalMaterial({
+      color: 0xB0101C,
+      transparent: true,
+      opacity: 0.45,
+      roughness: 0.05,
+      metalness: 0.1,
+      clearcoat: 1.0
+    });
 
     // Светящиеся копии материалов фар
     const glowMats = [];
@@ -1146,12 +1200,33 @@
         // Точные имена материалов встроенной модели S3 8V (у чужих моделей «material» / «material_23» значат другое)
         if (loadedIsBuiltin) {
           if (matName === 'material_23' || matName === 'rimlogo') { child.material = blackAlloyMaterial; return; }
-          if (matName === 'vidros' || matName === 'windows_int') { child.material = bunkerGlassMaterial; return; }
+          if (matName === 'windows_int') { child.material = bunkerGlassMaterial; return; }
+          // VIDROS — и окна, и колпаки фар/фонарей: тонируем только окна, фары оставляем прозрачными
+          if (matName === 'vidros') {
+            splitMeshByRegion(child, lampArea, 3);
+            child.material = [headlightLensMat, rearLensMat, bunkerGlassMaterial];
+            return;
+          }
           if (matName === 'carpaint') { child.material = bodyMaterial; return; }
           if (matName === 'tyre') { child.material = tireMaterial; return; }
-          if (matName === 'flights') { child.material = getGlow(origMat, 0xFFF1D6, 0.6); return; }
+          // FLIGHTS — начинка передних фар (светит тёплым белым) и немного деталей задних фонарей (не светят)
+          if (matName === 'flights') {
+            splitMeshByRegion(child, frontOrRear, 2);
+            child.material = [getGlow(origMat, 0xFFF1D6, 1.1), origMat];
+            return;
+          }
+          // RED2 — красные детали по всей машине; светятся только секции задних фонарей
+          if (matName === 'red2') {
+            splitMeshByRegion(child, rearLampRed, 2);
+            child.material = [getGlow(origMat, 0xFF1428, 1.6), origMat];
+            return;
+          }
           if (matName === 'material') { child.material = getGlow(origMat, 0xFF1428, 1.4); return; } // задние фонари
-          if (matName === 'ext_plate_plastic') { child.material = getPlateMat(); return; }
+          if (matName === 'ext_plate_plastic') {
+            splitMeshByRegion(child, frontOrRear, 2);
+            child.material = [getPlateMat('AX 2235 OO'), getPlateMat('KE 2929 AE')];
+            return;
+          }
         }
         const meshName = (child.name || '').toLowerCase();
         const combined = `${matName} ${meshName}`;
@@ -1261,6 +1336,8 @@
           loadedGlbGroup.position.y -= scaledBox.min.y;
 
           originalMaterialsMap.clear();
+          // Деление мешей по зонам (фары / окна, перед / зад) считает по мировым координатам
+          loadedGlbGroup.updateMatrixWorld(true);
           applyPhotoStyleToLoadedModel(loadedGlbGroup, customRestyleEnabled);
 
           carRoot.add(loadedGlbGroup);
@@ -1374,8 +1451,9 @@
     scene.add(headlightSpotR);
     scene.add(headlightSpotR.target);
 
-    const tailGlowLight = new THREE.PointLight(0xFF1428, 4.5, 3.5);
-    tailGlowLight.position.set(0, 0.62, -2.35);
+    // Отсвет фонарей на полу и бампере; слабый и ниже номера, чтобы не красить номер в красный
+    const tailGlowLight = new THREE.PointLight(0xFF1428, 1.6, 3.0);
+    tailGlowLight.position.set(0, 0.3, -2.45);
     scene.add(tailGlowLight);
 
     // ============================================================================
